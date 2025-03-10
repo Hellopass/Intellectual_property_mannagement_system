@@ -10,7 +10,7 @@ Intellectual_property_mannagement_system
 ├─internal          # 私有代码库
 │  ├─api            # Api定义和协议
 │  └─services       # 服务文件
-├─material          # md文件素材
+├─static            # md文件素材,日志文件存放位置
 ├─pkg               # 内部库代码
 │  ├─models         # 数据模型
 │  └─utils          #工具类函数
@@ -41,8 +41,10 @@ https://app.wepatent.cn    # WePatent 管理平台
 
 ## 第三方包
 ```text
-github.com/gin-gonic/gin       #gin框架
-github.com/gorm.io/gorm        #gorm数据库操作
-github.com/gorm.io/driver/mysql   #mysql 驱动
-
+github.com/gin-gonic/gin          # gin框架
+github.com/gorm.io/gorm           # gorm数据库操作
+github.com/gorm.io/driver/mysql   # mysql驱动
+github.com/spf13/viper            # 配置管理
+go.uber.org/zap                   # 日志包
+gopkg.in/natefinch/lumberjack.v2  # 日志写入滚动文件，配合zap使用
 ```

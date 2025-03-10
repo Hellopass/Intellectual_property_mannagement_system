@@ -27,7 +27,7 @@ https://ipdps.cnipa.gov.cn
 
 ## 参考网站
 
-一下系统仅仅用于学习
+以下系统仅仅用于学习
 
 ```text
 https://app.wepatent.cn    # WePatent 管理平台

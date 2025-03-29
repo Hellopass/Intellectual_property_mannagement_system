@@ -1,5 +1,13 @@
 # Intellectual_property_mannagement_system(知识产权管理系统)
 
+## 项目管理--github
+```text
+本项目上传github仓库
+https://github.com/Hellopass/Intellectual_property_mannagement_system.git
+
+git@github.com:Hellopass/Intellectual_property_mannagement_system.git
+```
+
 ## 项目结构:
 
 ```text
@@ -47,4 +55,9 @@ github.com/gorm.io/driver/mysql   # mysql驱动
 github.com/spf13/viper            # 配置管理
 go.uber.org/zap                   # 日志包
 gopkg.in/natefinch/lumberjack.v2  # 日志写入滚动文件，配合zap使用
+```
+
+## 配置日志 zap 2025/03/29
+```text
+
 ```

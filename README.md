@@ -61,3 +61,9 @@ gopkg.in/natefinch/lumberjack.v2  # 日志写入滚动文件，配合zap使用
 ```text
 实现滚动数据
 ```
+
+
+## 数据课设计
+```text
+https://app.quickdatabasediagrams.com/#/d/kZcSN2
+```

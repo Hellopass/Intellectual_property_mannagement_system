@@ -1,0 +1,6 @@
+redis:
+  addr: localhost:6379
+  password:
+  db: 0
+  pool_size: 10
+  min_idle_conns: 4

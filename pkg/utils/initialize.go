@@ -32,4 +32,10 @@ func init() {
 		Logger.Error("初始化mysql失败")
 	}
 
+	//初始化redis
+	r := NewRedisClient()
+	RDB = r
+
+	//初始化gin
+	GetGinConfig()
 }

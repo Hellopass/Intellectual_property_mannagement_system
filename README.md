@@ -66,4 +66,19 @@ gopkg.in/natefinch/lumberjack.v2  # 日志写入滚动文件，配合zap使用
 ## 数据课设计
 ```text
 https://app.quickdatabasediagrams.com/#/d/kZcSN2
+
+```
+## jwt中间件
+```
+身份认证（Authentication）
+数据传递（Claims Injection）
+请求拦截（Request Filtering）
+5. 统一错误处理
+ 安全防护（Security Enforcement）
+```
+
+
+## 任务
+```text
+集成redis
 ```

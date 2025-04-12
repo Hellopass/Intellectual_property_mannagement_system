@@ -1,0 +1,6 @@
+app: # 应用基本配置
+  env: debug # 环境名称
+  port: 8080 # 服务监听端口号
+  app_name: gin-app # 应用名称
+  app_url: http://localhost # 应用域名
+  jwt_key: 5f4dcc3b5aa765d61d8327deb882cf99231b2c4d8d3a6565f4dcc3b5aa765d61d #jwt钥匙

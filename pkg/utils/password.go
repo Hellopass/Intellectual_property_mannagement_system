@@ -16,7 +16,7 @@ const (
 	SaltLength             = 8 // 盐值长度（增强至32字节）
 )
 
-// 生成密码学安全随机盐
+// GenerateSecureSalt 生成密码学安全随机盐
 func GenerateSecureSalt() (string, error) {
 	salt := make([]byte, SaltLength)
 	if _, err := rand.Read(salt); err != nil {
@@ -25,7 +25,7 @@ func GenerateSecureSalt() (string, error) {
 	return hex.EncodeToString(salt), nil
 }
 
-// 带长度验证的密码哈希
+// SecureHashWithSalt 带长度验证的密码哈希
 func SecureHashWithSalt(password string, salt string) (string, error) {
 	// 严格密码长度校验
 	if len(password) != RequiredPasswordLength {
@@ -48,7 +48,7 @@ func SecureHashWithSalt(password string, salt string) (string, error) {
 	return hex.EncodeToString(secondHash[:]), nil
 }
 
-// 密码验证函数
+// VerifyPassword 密码验证函数
 func VerifyPassword(inputPassword, storedSalt, storedHash string) bool {
 	// 前置长度检查
 	if len(inputPassword) != RequiredPasswordLength {
@@ -65,7 +65,7 @@ func VerifyPassword(inputPassword, storedSalt, storedHash string) bool {
 	return subtle.ConstantTimeCompare([]byte(computedHash), []byte(storedHash)) == 1
 }
 
-// 分割拿到盐值
+// GetSlat 分割拿到盐值
 func GetSlat(password string) string {
 	return string([]byte(password)[len(password)/2:])
 }

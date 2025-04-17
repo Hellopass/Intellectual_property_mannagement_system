@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // 安全要求配置
@@ -57,6 +58,7 @@ func VerifyPassword(inputPassword, storedSalt, storedHash string) bool {
 
 	// 计算哈希
 	computedHash, err := SecureHashWithSalt(inputPassword, storedSalt)
+	computedHash = storedSalt + ":" + computedHash
 	if err != nil {
 		return false
 	}
@@ -67,5 +69,5 @@ func VerifyPassword(inputPassword, storedSalt, storedHash string) bool {
 
 // GetSlat 分割拿到盐值
 func GetSlat(password string) string {
-	return string([]byte(password)[len(password)/2:])
+	return strings.Split(password, ":")[0]
 }

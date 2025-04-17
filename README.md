@@ -82,3 +82,5 @@ https://app.quickdatabasediagrams.com/#/d/kZcSN2
 ```text
 集成redis
 ```
+
+## 保存文件使用的是nginx

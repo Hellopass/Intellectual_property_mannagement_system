@@ -1,0 +1,4 @@
+nginx:
+  location_avatar: D:\nginx\nginx-1.27.0\html\avatar
+  location_docs: D:\nginx\nginx-1.27.0\html\docs
+  url: http://127.0.0.1:9000

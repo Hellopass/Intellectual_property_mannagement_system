@@ -43,7 +43,7 @@ func generateSecureCode() string {
 }
 
 // SendAddUserEmailCode 发送邮件
-func SendAddUserEmailCode(toEmail string) error {
+func SendAddUserEmailCode(toEmail string, subject string) error {
 	config := getEmailConfig()
 	e := email.NewEmail()
 	//设置发送方的邮箱
@@ -51,7 +51,7 @@ func SendAddUserEmailCode(toEmail string) error {
 	// 设置接收方的邮箱
 	e.To = []string{toEmail}
 	//设置主题
-	e.Subject = "注册验证码"
+	e.Subject = subject
 	//设置code
 	code := generateSecureCode()
 	err := RedisSet(toEmail, code)

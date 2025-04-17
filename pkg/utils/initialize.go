@@ -38,4 +38,8 @@ func init() {
 
 	//初始化gin
 	GetGinConfig()
+
+	//初始化Nginx配置
+	NgX = getNginxConfig()
+
 }

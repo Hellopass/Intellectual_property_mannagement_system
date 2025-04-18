@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"intellectual_property/pkg/utils"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -13,6 +14,13 @@ const (
 	UnderReview                 //审核中
 	Authorized                  //已授权
 	Rejected                    //已驳回
+)
+
+// 专利类型编码
+const (
+	PatentInvention    = iota //发明专利
+	PracticalInvention        //实用新型
+	AppearanceDesign          //外观设计
 )
 
 // Patent 专利信息表
@@ -87,9 +95,41 @@ func UpdatePatent(patent *Patent) error {
 	return utils.DB.Model(&Patent{}).Where("id = ? ", patent.Id).Select("patent_name", "warrant_date", "status").Error
 }
 
-// DeletePatent 删除专利信息
+// DeletePatent 删除专利及关联费用信息
 func DeletePatent(applyNo string) error {
-	return utils.DB.Where("apply_no=?", applyNo).Delete(&Patent{}).Error
+	// 开启事务
+	tx := utils.DB.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// 1. 根据申请号获取专利ID
+	var patent Patent
+	if err := tx.Where("apply_no = ?", applyNo).First(&patent).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("专利查询失败: %v", err)
+	}
+
+	// 2. 删除关联的PatentFee记录
+	if err := tx.Where("patent_id = ?", patent.Id).Delete(&PatentFee{}).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("删除费用记录失败: %v", err)
+	}
+
+	// 3. 删除专利记录
+	if err := tx.Delete(&patent).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("删除专利失败: %v", err)
+	}
+
+	// 提交事务
+	if err := tx.Commit().Error; err != nil {
+		return fmt.Errorf("事务提交失败: %v", err)
+	}
+
+	return nil
 }
 
 // FindPatentFuzzy 模糊查询
@@ -122,4 +162,56 @@ func GetPatentFile(applyNo string) ([]string, error) {
 		ans = append(ans, "/docs"+"/"+applyNo+"/"+file.Name())
 	}
 	return ans, nil
+}
+
+// UpdateStatusByApplicationNumber 根据申请号更新status同时更新到年费表中
+func UpdateStatusByApplicationNumber(applyNo string, newStatus int) error {
+	// 参数校验
+	if applyNo == "" {
+		return fmt.Errorf("专利申请号不能为空")
+	}
+	if newStatus < AwaitingApproval || newStatus > Rejected {
+		return fmt.Errorf("无效的状态码: %d", newStatus)
+	}
+
+	// 使用 GORM 进行更新操作
+	result := utils.DB.Model(&Patent{}).
+		Where("apply_no = ?", applyNo).
+		Update("status", newStatus)
+
+	// 错误处理
+	if result.Error != nil {
+		return fmt.Errorf("更新状态失败: %v", result.Error)
+	}
+
+	// 检查是否实际更新了记录
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("未找到申请号为 %s 的专利", applyNo)
+	}
+
+	var p Patent
+	err := utils.DB.Model(&Patent{}).Where("apply_no = ?", applyNo).Find(&p).Error
+	if err != nil {
+		return err
+	}
+	//添加年费
+	parseInt, err3 := strconv.ParseInt(p.PatentType, 10, 64)
+	if err3 != nil {
+		return err3
+	}
+	now := time.Now()
+	curr := now.Year()
+	f := PatentFee{
+		PatentID:      p.Id,
+		Patent:        p,
+		FeeYear:       curr,
+		PaymentStatus: 0,
+		DeadlineDate:  now.AddDate(0, 1, 0), //设置一个月
+		Amount:        GetFee(int(parseInt)),
+	}
+	err2 := NewPatentAnnualFee(&f)
+	if err2 != nil {
+		return err2
+	}
+	return nil
 }

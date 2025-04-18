@@ -12,6 +12,7 @@ func main() {
 	// 添加路由
 	api.InitApi(r)
 
+	models.AutoMigrate()
 	// 启动服务
 	r.Run(":8080")
 	//rand.Seed(time.Now().UnixNano())

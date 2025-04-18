@@ -1,6 +1,7 @@
 package dispose
 
 import (
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"intellectual_property/pkg/models"
 	"intellectual_property/pkg/utils"
@@ -11,7 +12,6 @@ import (
 
 // AddPatent 新建申请
 func AddPatent(c *gin.Context) {
-
 	//拿到基础信息
 	var p models.Patent
 	if err := c.ShouldBind(&p); err != nil {
@@ -49,6 +49,7 @@ func AddPatent(c *gin.Context) {
 		Resp(c, false, CodeError, "新建申请失败", nil)
 		return
 	}
+
 	//成功返回申请号
 	Resp(c, true, http.StatusOK, "新建申请成功", gin.H{
 		"apply_no": applyNo,
@@ -147,4 +148,129 @@ func GetPatentFile(c *gin.Context) {
 	}
 	Resp(c, true, http.StatusOK, "获取文件成功", filepath)
 
+}
+
+// UpdateStatus 更新状态
+func UpdateStatus(c *gin.Context) {
+	applyno := c.PostForm("apply_no") //申请号
+	status := c.PostForm("status")    //状态
+	atoi, err := strconv.Atoi(status)
+	if err != nil {
+		logger.Error(err.Error())
+		Resp(c, false, CodeError, "通过申请失败", nil)
+		return
+	}
+	err = models.UpdateStatusByApplicationNumber(applyno, atoi)
+	if err != nil {
+		logger.Error(err.Error())
+		Resp(c, false, CodeError, "通过申请失败", nil)
+		return
+	}
+
+	Resp(c, true, http.StatusOK, "通过申请成功", nil)
+}
+
+// GetFeeStatistics 统计
+func GetFeeStatistics(c *gin.Context) {
+	statistics, err := models.GetFeeStatistics()
+	if err != nil {
+		logger.Error(err.Error())
+		Resp(c, false, CodeError, "初始化失败", nil)
+		return
+	}
+	Resp(c, true, http.StatusOK, "初始化成功", statistics)
+}
+
+// GetAllPatentFees 获取所有专利年费记录分页
+func GetAllPatentFees(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	size, _ := strconv.Atoi(c.DefaultQuery("size", "10"))
+	pagination, fees, err := models.GetAllPatentFees(page, size)
+	if err != nil {
+		Resp(c, false, CodeError, "查询年费失败", nil)
+		return
+	}
+	Resp(c, true, http.StatusOK, "初始化成功", gin.H{
+		"pagination": pagination,
+		"fees":       fees,
+	})
+
+}
+
+// UpdatePatentFeeByApplyNo 根据申请号更新专利费用记录
+func UpdatePatentFeeByApplyNo(c *gin.Context) {
+	apply_no := c.PostForm("apply_no") //申请号
+	amount, err := strconv.ParseFloat(c.PostForm("amount"), 64)
+	if err != nil {
+		logger.Error(err.Error())
+		Resp(c, false, CodeError, "更新失败", nil)
+		return
+	}
+	err = models.UpdatePatentFeeByApplyNo(apply_no, map[string]interface{}{
+		"amount": amount,
+	})
+	if err != nil {
+		logger.Error(err.Error())
+		Resp(c, false, CodeError, "更新失败", nil)
+		return
+	}
+	Resp(c, true, http.StatusOK, "更新成功", nil)
+}
+
+// GetPatentFeesByFilters 根据状态、关键字模糊查询（申请号/专利名称）分页查询
+func GetPatentFeesByFilters(c *gin.Context) {
+	// 获取查询参数
+	statusStr := c.DefaultQuery("status", "")       // 缴费状态
+	keyword := c.DefaultQuery("keyword", "")        // 合并后的关键字查询
+	pageStr := c.DefaultQuery("page", "1")          // 页码
+	pageSizeStr := c.DefaultQuery("pageSize", "10") // 页长
+
+	// 解析分页参数
+	page, err := strconv.Atoi(pageStr)
+	if err != nil || page < 1 {
+		logger.Error(fmt.Sprintf("无效页码参数: %s", pageStr))
+		Resp(c, false, http.StatusBadRequest, "无效的页码", nil)
+		return
+	}
+
+	pageSize, err := strconv.Atoi(pageSizeStr)
+	if err != nil || pageSize <= 0 {
+		logger.Error(fmt.Sprintf("无效页长参数: %s", pageSizeStr))
+		Resp(c, false, http.StatusBadRequest, "无效的页长", nil)
+		return
+	}
+
+	// 处理状态参数
+	var statusPtr *models.PaymentStatus
+	if statusStr != "" {
+		statusInt, err := strconv.Atoi(statusStr)
+		if err != nil || statusInt < int(models.StatusUnpaid) || statusInt > int(models.StatusOverdue) {
+			logger.Error(fmt.Sprintf("无效状态参数: %s", statusStr))
+			Resp(c, false, http.StatusBadRequest, "无效的缴费状态", nil)
+			return
+		}
+		status := models.PaymentStatus(statusInt)
+		statusPtr = &status
+	}
+
+	// 执行查询
+	information, fees, err := models.GetPatentFeesByFilters(
+		statusPtr,
+		keyword,
+		page,
+		pageSize,
+	)
+
+	// 处理错误
+	if err != nil {
+		logger.Error("查询失败: " + err.Error())
+		Resp(c, false, http.StatusInternalServerError, "查询失败", nil)
+		return
+	}
+
+	// 返回结果
+	Resp(c, true, http.StatusOK, "查询成功", gin.H{
+		"data":       fees,
+		"pagination": information,
+	})
 }

@@ -38,13 +38,14 @@ func generateSerialNumber() string {
 }
 
 // GenerateApplyNo 生成专利申请号
-func GenerateApplyNo(countryCode string, year string, patentType string) (string, error) {
+func GenerateApplyNo(countryCode string, year string, patentType int) (string, error) {
+	itoa := strconv.Itoa(patentType)
 	serialNumber := generateSerialNumber()
-	if len(year) != 4 || len(patentType) != 1 || len(serialNumber) != 7 {
+	if len(year) != 4 || len(itoa) != 1 || len(serialNumber) != 7 {
 		return "", errors.New("输入的参数长度不正确")
 	}
 
-	patentID := countryCode + year + patentType + serialNumber
+	patentID := countryCode + year + itoa + serialNumber
 	checkDigit := calculateCheckDigit(patentID)
 	return patentID + checkDigit, nil
 }

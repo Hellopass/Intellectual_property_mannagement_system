@@ -1,4 +1,4 @@
-package dispose
+package service
 
 import (
 	"github.com/gin-gonic/gin"
@@ -6,6 +6,7 @@ import (
 	"intellectual_property/pkg/utils"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 // 封装返回码
@@ -21,6 +22,37 @@ var logger = utils.Logger
 
 // Resp 返回体
 var Resp = utils.Resp
+
+// GetSimpleUsers 获取所有用户部分数据--以及自己的信息
+func GetSimpleUsers(c *gin.Context) {
+	//解析token
+	authHeader := c.GetHeader("Authorization")
+	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+	claims, err := utils.ParseToken(tokenString)
+	if err != nil {
+		logger.Error("Token解析失败: " + err.Error())
+		Resp(c, false, http.StatusUnauthorized, "无效的访问令牌", nil)
+		return
+	}
+	//拿到本身的信息
+	user, err2 := models.GetSimpleUserByID(claims.UserID)
+	if err2 != nil {
+		logger.Error("查询失败: " + err2.Error())
+		Resp(c, false, http.StatusBadRequest, "查询失败", nil)
+		return
+	}
+	//查询所有的信息
+	users, err3 := models.GetAllSimpleUsers()
+	if err3 != nil {
+		logger.Error("查询失败: " + err3.Error())
+		Resp(c, false, http.StatusBadRequest, "查询失败", nil)
+		return
+	}
+	Resp(c, true, http.StatusOK, "success", gin.H{
+		"current": user,
+		"users":   users,
+	})
+}
 
 // AddUser 注册用户
 func AddUser(c *gin.Context) {

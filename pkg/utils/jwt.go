@@ -9,7 +9,7 @@ import (
 )
 
 // 定义 JWT 密钥（生产环境应从安全位置获取）
-var jwtKey []byte
+var jwtKey = []byte(GinConfig.JwtKey)
 
 // CustomClaims 自定义 Claims 结构体
 type CustomClaims struct {
@@ -34,7 +34,6 @@ func GenerateToken(userID int, authority string, userName string) (string, error
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	jwtKey = []byte(GinConfig.JwtKey)
 	return token.SignedString(jwtKey)
 }
 
@@ -79,3 +78,64 @@ func JWTMiddleware() gin.HandlerFunc {
 		}
 	}
 }
+
+// ParseToken 解析 JWT Token 并返回 Claims 信息
+// 参数：tokenString - 去掉 "Bearer " 前缀的纯 Token 字符串
+// 返回：解析后的 Claims 指针和错误信息
+func ParseToken(tokenString string) (*CustomClaims, error) {
+	// 解析 Token 并验证签名
+	token, err := jwt.ParseWithClaims(tokenString, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
+		// 验证签名方法
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("非预期的签名方法: %v", token.Header["alg"])
+		}
+		return jwtKey, nil // 直接从配置获取最新密钥
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	// 类型断言获取 Claims
+	if claims, ok := token.Claims.(*CustomClaims); ok && token.Valid {
+		return claims, nil
+	}
+
+	return nil, fmt.Errorf("无效的 Token 声明")
+}
+
+//// 在需要解析的地方调用
+//func SomeHandler(c *gin.Context) {
+//	// 从请求头获取完整 Token
+//	authHeader := c.GetHeader("Authorization")
+//	if authHeader == "" {
+//		// 处理无 Token 情况
+//	}
+//
+//	// 提取纯 Token 部分（去掉 Bearer 前缀）
+//	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+//
+//	// 调用解析函数
+//	claims, err := utils.ParseToken(tokenString)
+//	if err != nil {
+//		// 根据错误类型处理
+//		switch {
+//		case strings.Contains(err.Error(), "过期"):
+//			c.JSON(http.StatusUnauthorized, gin.H{"error": "登录已过期"})
+//		case strings.Contains(err.Error(), "签名验证失败"):
+//			c.JSON(http.StatusUnauthorized, gin.H{"error": "非法 Token"})
+//		default:
+//			c.JSON(http.StatusUnauthorized, gin.H{"error": "认证失败"})
+//		}
+//		return
+//	}
+//
+//	// 使用解析后的字段
+//	fmt.Printf("用户ID: %d\n权限: %s\n用户名: %s\n",
+//		claims.UserID,
+//		claims.Authority,
+//		claims.UserName,
+//	)
+//
+//	// 继续业务逻辑...
+//}

@@ -1,4 +1,4 @@
-package dispose
+package service
 
 import (
 	"github.com/gin-gonic/gin"

@@ -25,12 +25,27 @@ type User struct {
 	AvatarUrl  string `json:"avatar_url" gorm:"avatar_url"`                   //用户头像
 }
 
-// CreateUserTable 迁移user表
-func CreateUserTable() {
-	err := utils.DB.AutoMigrate(&User{})
-	if err != nil {
-		return
+// SimpleUser 如果只需要特定字段，可以定义轻量结构体
+type SimpleUser struct {
+	ID        int    `json:"id"`
+	UserName  string `json:"user_name"`
+	Authority string `json:"authority"`
+}
+
+// GetAllSimpleUsers 获取部分user
+func GetAllSimpleUsers() ([]SimpleUser, error) {
+	var users []SimpleUser
+	err := utils.DB.Model(&User{}).Select("id, user_name,authority").Find(&users).Error
+	return users, err
+}
+
+// GetSimpleUserByID 根据用户ID获取部分用户信息
+func GetSimpleUserByID(userID int) (SimpleUser, error) {
+	var user SimpleUser
+	if err := utils.DB.Model(&User{}).Select("id, user_name,authority").Find(&user, userID).Error; err != nil {
+		return SimpleUser{}, err
 	}
+	return user, nil
 }
 
 // CreateUser 创建新用户

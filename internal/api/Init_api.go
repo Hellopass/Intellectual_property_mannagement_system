@@ -7,4 +7,5 @@ func InitApi(r *gin.Engine) {
 	initLogin(r)
 	initEmail(r)
 	initPatent(r)
+	initArticle(r)
 }

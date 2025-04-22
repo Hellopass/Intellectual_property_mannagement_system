@@ -1,4 +1,4 @@
-package dispose
+package service
 
 import (
 	"fmt"
@@ -272,5 +272,21 @@ func GetPatentFeesByFilters(c *gin.Context) {
 	Resp(c, true, http.StatusOK, "查询成功", gin.H{
 		"data":       fees,
 		"pagination": information,
+	})
+}
+
+// GetAnalysis 抓专利数据分析
+func GetAnalysis(c *gin.Context) {
+	// 获取各分析结果
+	yearly, _ := models.GetYearlyTrends()
+	types, _ := models.GetTypeDistribution()
+	applicants, _ := models.GetTopApplicants()
+	tech, _ := models.GetTechDomains()
+
+	Resp(c, true, http.StatusOK, "查询成功", gin.H{
+		"yearly_trends":     yearly,
+		"type_distribution": types,
+		"top_applicants":    applicants,
+		"tech_domains":      tech,
 	})
 }

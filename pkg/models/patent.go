@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"intellectual_property/pkg/utils"
 	"os"
-	"strconv"
 	"time"
 )
 
@@ -30,7 +29,7 @@ type Patent struct {
 	ApplyNo     string    `json:"apply_no" gorm:"apply_no;type:varchar(20)"`         //申请号
 	PatentName  string    `json:"patent_name" gorm:"patent_name;type:varchar(50)"`   //专利名称
 	WarrantDate time.Time `json:"warrant_date" gorm:"warrant_date;type:date"`        //授权日期
-	PatentType  string    `json:"patent_type" gorm:"patent_type;type:varchar(20)"`   //专利类型
+	PatentType  int       `json:"patent_type" gorm:"column:patent_type;type:int"`    //专利类型
 	UserID      int       `json:"user_id" gorm:"user_id;type:bigint"`                //发明者id ,也是user_id
 	User        User      //发明人信息
 	Status      int       `json:"status" gorm:"status;type:int"` //专利状态
@@ -159,7 +158,7 @@ func GetPatentFile(applyNo string) ([]string, error) {
 		return nil, err
 	}
 	for _, file := range dir {
-		ans = append(ans, "/docs"+"/"+applyNo+"/"+file.Name())
+		ans = append(ans, "/docs/"+applyNo+"/"+file.Name())
 	}
 	return ans, nil
 }
@@ -195,10 +194,6 @@ func UpdateStatusByApplicationNumber(applyNo string, newStatus int) error {
 		return err
 	}
 	//添加年费
-	parseInt, err3 := strconv.ParseInt(p.PatentType, 10, 64)
-	if err3 != nil {
-		return err3
-	}
 	now := time.Now()
 	curr := now.Year()
 	f := PatentFee{
@@ -207,7 +202,7 @@ func UpdateStatusByApplicationNumber(applyNo string, newStatus int) error {
 		FeeYear:       curr,
 		PaymentStatus: 0,
 		DeadlineDate:  now.AddDate(0, 1, 0), //设置一个月
-		Amount:        GetFee(int(parseInt)),
+		Amount:        GetFee(p.PatentType),
 	}
 	err2 := NewPatentAnnualFee(&f)
 	if err2 != nil {

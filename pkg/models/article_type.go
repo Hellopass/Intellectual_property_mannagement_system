@@ -11,18 +11,18 @@ import (
 type ArticleType int
 
 const (
-	Books               ArticleType = iota // 书籍（代码0）
-	JournalPapers                          // 期刊论文（代码1）
-	ConferencePapers                       // 会议论文（代码2）
-	DegreePapers                           // 学位论文（代码3）
-	TechnologyStandards                    // 技术标准（代码4）
-	WebResources                           // 网页资源（代码5）
+	Books               ArticleType = iota + 1 // 书籍
+	JournalPapers                              // 期刊论文
+	ConferencePapers                           // 会议论文
+	DegreePapers                               // 学位论文
+	TechnologyStandards                        // 技术标准
+	WebResources                               // 网页资源
 )
 
 // articleTypeMap 类型映射字典
 // 实现中文类型名称到枚举值的映射，用于前端展示和输入解析
 var articleTypeMap = map[string]ArticleType{
-	"书籍":   Books,
+	"书籍":     Books,
 	"期刊论文": JournalPapers,
 	"会议论文": ConferencePapers,
 	"学位论文": DegreePapers,

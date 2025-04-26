@@ -4,14 +4,14 @@ import (
 	"time"
 )
 
-// PatentFee 专利年费模型
-type PatentFee struct {
-	ID          int       `json:"id" gorm:"primaryKey;autoIncrement;type:bigint"`
-	PatentID    int       `json:"patent_id" gorm:"type:bigint;comment:专利ID"`
-	Patent      Patent    `json:"patent" gorm:"foreignKey:PatentID"`
-	ReviewFee   float64   `json:"review_fee" gorm:"type:float;comment:审核费用"`
-	IsPaid      bool      `json:"is_paid" gorm:"comment:是否已支付"`
-	CreatedAt   time.Time `json:"created_at" gorm:"type:datetime;comment:创建时间"`
+// ArticleFee 著作年费模型
+type ArticleFee struct {
+	ID         int     `json:"id" gorm:"primaryKey;autoIncrement;type:bigint"`
+	ArticleID  int     `json:"article_id" gorm:"type:bigint;comment:著作ID"`
+	Article    Article `json:"article" gorm:"foreignKey:ArticleID"`
+	ReviewFee  float64 `json:"review_fee" gorm:"type:float;comment:审核费用"`
+	IsPaid     bool    `json:"is_paid" gorm:"comment:是否已支付"`
+	CreatedAt  time.Time `json:"created_at" gorm:"type:datetime;comment:创建时间"`
 	PaymentDate time.Time `json:"payment_date" gorm:"type:datetime;comment:支付时间"`
 	// 新增截至缴费日期字段
 	PaymentDeadline time.Time `json:"payment_deadline" gorm:"type:datetime;comment:截至缴费日期"`
@@ -19,21 +19,21 @@ type PatentFee struct {
 	Status int `json:"status" gorm:"type:int;comment:费用状态"`
 }
 
-// GetAllPatentFees 获取所有专利年费
-func GetAllPatentFees(keyword string, status int, page int, pageSize int) ([]PatentFee, int64, error) {
-	var fees []PatentFee
+// GetAllArticleFees 获取所有著作年费
+func GetAllArticleFees(keyword string, status int, page int, pageSize int) ([]ArticleFee, int64, error) {
+	var fees []ArticleFee
 	var total int64
 
-	query := PatentDB.Preload("Patent")
+	query := ArticleDB.Preload("Article")
 
 	// 关键词模糊查询
 	if keyword != "" {
 		keyword = "%" + keyword + "%"
 		query = query.Where(
 			"EXISTS ("+
-				"SELECT 1 FROM patents "+
-				"WHERE patents.id = patent_fees.patent_id "+
-				"AND (patents.title LIKE ? OR patents.application_number LIKE ?)"+
+				"SELECT 1 FROM articles "+
+				"WHERE articles.id = article_fees.article_id "+
+				"AND (articles.title LIKE ? OR articles.application_number LIKE ?)"+
 				")",
 			keyword,
 			keyword,
@@ -46,7 +46,7 @@ func GetAllPatentFees(keyword string, status int, page int, pageSize int) ([]Pat
 	}
 
 	// 计算总数
-	if err := query.Model(&PatentFee{}).Count(&total).Error; err != nil {
+	if err := query.Model(&ArticleFee{}).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -63,11 +63,11 @@ func GetAllPatentFees(keyword string, status int, page int, pageSize int) ([]Pat
 	return fees, total, nil
 }
 
-// GetMonthlyPatentFeeStats 获取本月专利年费统计信息
-func GetMonthlyPatentFeeStats() (int, float64, int, float64, error) {
+// GetMonthlyArticleFeeStats 获取本月著作年费统计信息
+func GetMonthlyArticleFeeStats() (int, float64, int, float64, error) {
 
-	var fees []PatentFee
-	if err := PatentDB.Find(&fees).Error; err != nil {
+	var fees []ArticleFee
+	if err := ArticleDB.Debug().Find(&fees).Error; err != nil {
 		return 0, 0, 0, 0, err
 	}
 

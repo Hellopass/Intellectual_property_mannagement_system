@@ -4,11 +4,11 @@ import (
 	"time"
 )
 
-// PatentFee 专利年费模型
-type PatentFee struct {
+// TrademarkFee 商标年费模型
+type TrademarkFee struct {
 	ID          int       `json:"id" gorm:"primaryKey;autoIncrement;type:bigint"`
-	PatentID    int       `json:"patent_id" gorm:"type:bigint;comment:专利ID"`
-	Patent      Patent    `json:"patent" gorm:"foreignKey:PatentID"`
+	TrademarkID int       `json:"trademark_id" gorm:"type:bigint;comment:商标ID"`
+	Trademark   Trademark `json:"trademark" gorm:"foreignKey:TrademarkID"`
 	ReviewFee   float64   `json:"review_fee" gorm:"type:float;comment:审核费用"`
 	IsPaid      bool      `json:"is_paid" gorm:"comment:是否已支付"`
 	CreatedAt   time.Time `json:"created_at" gorm:"type:datetime;comment:创建时间"`
@@ -19,21 +19,21 @@ type PatentFee struct {
 	Status int `json:"status" gorm:"type:int;comment:费用状态"`
 }
 
-// GetAllPatentFees 获取所有专利年费
-func GetAllPatentFees(keyword string, status int, page int, pageSize int) ([]PatentFee, int64, error) {
-	var fees []PatentFee
+// GetAllTrademarkFees 获取所有商标年费
+func GetAllTrademarkFees(keyword string, status int, page int, pageSize int) ([]TrademarkFee, int64, error) {
+	var fees []TrademarkFee
 	var total int64
 
-	query := PatentDB.Preload("Patent")
+	query := TrademarkDB.Preload("Trademark")
 
 	// 关键词模糊查询
 	if keyword != "" {
 		keyword = "%" + keyword + "%"
 		query = query.Where(
 			"EXISTS ("+
-				"SELECT 1 FROM patents "+
-				"WHERE patents.id = patent_fees.patent_id "+
-				"AND (patents.title LIKE ? OR patents.application_number LIKE ?)"+
+				"SELECT 1 FROM trademarks "+
+				"WHERE trademarks.id = trademark_fees.trademark_id "+
+				"AND (trademarks.title LIKE ? OR trademarks.application_number LIKE ?)"+
 				")",
 			keyword,
 			keyword,
@@ -46,7 +46,7 @@ func GetAllPatentFees(keyword string, status int, page int, pageSize int) ([]Pat
 	}
 
 	// 计算总数
-	if err := query.Model(&PatentFee{}).Count(&total).Error; err != nil {
+	if err := query.Model(&TrademarkFee{}).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -63,11 +63,11 @@ func GetAllPatentFees(keyword string, status int, page int, pageSize int) ([]Pat
 	return fees, total, nil
 }
 
-// GetMonthlyPatentFeeStats 获取本月专利年费统计信息
-func GetMonthlyPatentFeeStats() (int, float64, int, float64, error) {
+// GetMonthlyTrademarkFeeStats 获取本月商标年费统计信息
+func GetMonthlyTrademarkFeeStats() (int, float64, int, float64, error) {
 
-	var fees []PatentFee
-	if err := PatentDB.Find(&fees).Error; err != nil {
+	var fees []TrademarkFee
+	if err := TrademarkDB.Debug().Find(&fees).Error; err != nil {
 		return 0, 0, 0, 0, err
 	}
 

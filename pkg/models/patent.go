@@ -1,212 +1,405 @@
 package models
 
 import (
-	"fmt"
+	"errors"
 	"intellectual_property/pkg/utils"
+	"log"
 	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
-)
 
-// 设定专利状态码
-const (
-	AwaitingApproval = iota + 1 //待提交
-	UnderReview                 //审核中
-	Authorized                  //已授权
-	Rejected                    //已驳回
+	"gorm.io/gorm"
 )
 
 // 专利类型编码
 const (
-	PatentInvention    = iota //发明专利
-	PracticalInvention        //实用新型
-	AppearanceDesign          //外观设计
+	PatentInvention    = iota // 发明专利
+	PracticalInvention        // 实用新型
+	AppearanceDesign          // 外观设计
 )
 
-// Patent 专利信息表
+// Patent 专利核心模型
+// 包含专利基本信息和审批流程管理字段
 type Patent struct {
-	Id          int       `json:"id" gorm:"id;primaryKey;autoIncrement;type:bigint"` //专利id
-	ApplyData   time.Time `json:"apply_data" gorm:"apply_data;type:date"`            //申请日期
-	ApplyNo     string    `json:"apply_no" gorm:"apply_no;type:varchar(20)"`         //申请号
-	PatentName  string    `json:"patent_name" gorm:"patent_name;type:varchar(50)"`   //专利名称
-	WarrantDate time.Time `json:"warrant_date" gorm:"warrant_date;type:date"`        //授权日期
-	PatentType  int       `json:"patent_type" gorm:"column:patent_type;type:int"`    //专利类型
-	UserID      int       `json:"user_id" gorm:"user_id;type:bigint"`                //发明者id ,也是user_id
-	User        User      //发明人信息
-	Status      int       `json:"status" gorm:"status;type:int"` //专利状态
+	ID                int       `json:"id" gorm:"primaryKey;autoIncrement;type:bigint"`
+	PatentType        int       `json:"patent_type" gorm:"type:int;comment:专利类型代码"`
+	Title             string    `json:"title" gorm:"type:varchar(255);comment:专利全称"`
+	Abstract          string    `json:"abstract" gorm:"type:text;comment:详细摘要"`
+	ApplyDate         time.Time `json:"apply_date" gorm:"type:date;comment:申请日期"`
+	AttachmentUrl     string    `json:"attachment_url" gorm:"type:varchar(255);comment:附件存储路径"`
+	ApplicationNumber string    `json:"application_number" gorm:"type:varchar(255);comment:专利申请号"` // 新增申请号字段
+
+	// 作者管理字段
+	FirstAuthorID int            `json:"first_author_id" gorm:"type:bigint;comment:第一作者ID"`
+	FirstAuthor   User           `json:"first_author" gorm:"foreignKey:FirstAuthorID;comment:第一作者详细信息"`
+	Authors       []PatentAuthor `json:"authors" gorm:"foreignKey:PatentID;comment:所有作者关联记录"`
+
+	// 审批流程字段
+	CurrentStep    int `json:"current_step" gorm:"type:int;comment:当前审批步骤(1=初审,2=终审)"`
+	ApprovalStatus int `json:"approval_status" gorm:"type:int;comment:整体审批状态(0=进行中,1=通过,2=驳回)"`
+
+	// 初审相关字段
+	InitialReviewerID int       `json:"initial_reviewer_id" gorm:"type:bigint;comment:初审人ID"`
+	InitialComment    string    `json:"initial_comment" gorm:"type:text;comment:初审意见"`
+	InitialSubmitTime time.Time `json:"initial_submit_time" gorm:"type:datetime;comment:初审提交时间"`
+	InitialStatus     bool      `json:"initial_status" gorm:"comment:初审状态"`
+
+	// 终审相关字段
+	FinalReviewerID int       `json:"final_reviewer_id" gorm:"type:bigint;comment:终审人ID"`
+	FinalComment    string    `json:"final_comment" gorm:"type:text;comment:终审意见"`
+	FinalSubmitTime time.Time `json:"final_submit_time" gorm:"type:datetime;comment:终审提交时间"`
+	FinalStatus     bool      `json:"final_status" gorm:"comment:终审状态"`
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
-// CreatePatentTable 迁移user表
-func CreatePatentTable() {
-	err := utils.DB.AutoMigrate(&Patent{}, &User{})
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+// PatentAuthor 专利-作者关联模型
+// 记录专利与作者的关联关系及作者角色
+type PatentAuthor struct {
+	PatentID      int  `json:"patent_id" gorm:"primaryKey;type:bigint;comment:专利ID"`
+	UserID        int  `json:"user_id" gorm:"primaryKey;type:bigint;comment:用户ID"`
+	IsFirstAuthor bool `json:"is_first_author" gorm:"comment:是否第一作者"`
 }
 
-// CreatePatent 新建专利申请
-// 单个申请
-func CreatePatent(patent *Patent) error { return utils.DB.Create(patent).Error }
+// PatentDB 全局数据库连接实例
+// 使用utils包中初始化的数据库连接，用于执行数据库操作
+var PatentDB *gorm.DB = utils.DB
 
-// CreatePatentBatch  批量新建专利申请
-// 多个申请
-func CreatePatentBatch(patent []*Patent) error { return utils.DB.Create(patent).Error }
+// NewPatent 创建专利实例
+// 参数：
+//   - patentType: 专利类型代码
+//   - title: 专利标题
+//   - authorIDs: 所有作者ID列表
+//   - firstAuthorID: 第一作者ID（必须包含在authorIDs中）
+//   - abstract: 摘要内容
+//   - attachmentUrl: 附件地址
+func NewPatent(
+	patentType int,
+	title string,
+	authorIDs []int,
+	firstAuthorID int,
+	abstract string,
+	applicationNumber string, // 新增申请号参数
+) (*Patent, *PatentFee, error) {
 
-// GetPatentByID 专利查询
-func GetPatentByID(patentID int) (*Patent, error) {
-	var patent Patent
-	if err := utils.DB.Find(&patent, patentID).Error; err != nil {
-		return nil, err
+	// 验证第一作者合法性
+	if !contains(authorIDs, firstAuthorID) {
+		return nil, nil, errors.New("第一作者必须包含在作者列表中")
 	}
-	return &patent, nil
+
+	// 初始化作者关联记录
+	var authors []PatentAuthor
+	for _, uid := range authorIDs {
+		authors = append(authors, PatentAuthor{
+			UserID:        uid,
+			IsFirstAuthor: uid == firstAuthorID,
+		})
+	}
+
+	// 初始化年费对象
+	var reviewFee float64
+	switch patentType {
+	case PracticalInvention:
+		reviewFee = 1
+	case PatentInvention:
+		reviewFee = 2
+	case AppearanceDesign:
+		reviewFee = 1
+	}
+
+	patentFee := &PatentFee{
+		PatentID:        0, // 后续在创建专利时更新
+		ReviewFee:       reviewFee,
+		IsPaid:          false,
+		CreatedAt:       time.Now(),
+		PaymentDeadline: time.Now().AddDate(0, 1, 0), //一个月
+		Status:          0,
+	}
+
+	return &Patent{
+		PatentType:        patentType,
+		Title:             title,
+		Abstract:          abstract,
+		FirstAuthorID:     firstAuthorID,
+		Authors:           authors,
+		ApplyDate:         time.Now(),
+		CurrentStep:       1,
+		ApprovalStatus:    0,
+		ApplicationNumber: applicationNumber, // 初始化申请号字段
+	}, patentFee, nil
 }
 
-// GetPatentByInID 专利查询根据user_id
-func GetPatentByInID(InId int) ([]Patent, error) {
-	var patent []Patent
-	if err := utils.DB.Where("user_id=?", InId).Find(&patent).Error; err != nil {
-		return nil, err
-	}
-	for _, v := range patent {
-		id, err := GetUserByID(v.UserID)
-		if err != nil {
-			return nil, err
+// CreatePatentService 创建专利服务方法
+// 使用事务保证数据一致性：
+// 1. 创建主记录
+// 2. 创建作者关联记录
+// 3. 更新第一作者外键
+func (patent *Patent) CreatePatentService(patentFee *PatentFee) error {
+	return PatentDB.Transaction(func(tx *gorm.DB) error {
+		// 创建主记录
+		if err := tx.Create(patent).Error; err != nil {
+			return err
 		}
-		v.User = id
-	}
-	return patent, nil
+		// 更新专利年费对象的 PatentID
+		patentFee.PatentID = patent.ID
+
+		// 保存专利年费记录
+		if err := tx.Create(patentFee).Error; err != nil {
+			return err
+		}
+		// 清理旧关联记录
+		if err := tx.Where("patent_id = ?", patent.ID).Delete(&PatentAuthor{}).Error; err != nil {
+			return err
+		}
+
+		// 准备关联记录
+		authors := make([]PatentAuthor, len(patent.Authors))
+		for i, a := range patent.Authors {
+			authors[i] = PatentAuthor{
+				PatentID:      patent.ID,
+				UserID:        a.UserID,
+				IsFirstAuthor: a.UserID == patent.FirstAuthorID,
+			}
+		}
+
+		// 批量创建新关联记录
+		if err := tx.Create(authors).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
 }
 
-// GetPatentInformation 查询有所专利信息
-func GetPatentInformation() ([]Patent, error) {
+// UpdatePatentUrl 更新资源url
+func (patent *Patent) UpdatePatentUrl() error {
+	return PatentDB.Model(&Patent{}).Where("id =?", patent.ID).Select("attachment_url").Updates(patent).Error
+}
+
+// GetAllPatents 获取所有专利及其关联信息
+// 支持分页和预加载关联数据
+// 参数：
+//   - keyword: 关键词
+//   - approvalStatus: 审核状态
+//   - patentType: 专利类型
+//   - page: 页码（从1开始）
+//   - pageSize: 每页数量
+//   - preloadAuthors: 是否预加载作者详细信息
+//
+// 返回：
+//   - []Patent 专利列表
+//   - int 总记录数
+//   - error 错误信息
+func GetAllPatents(
+	keyword string,
+	approvalStatus int,
+	patentType int,
+	page int,
+	pageSize int,
+	preloadAuthors bool,
+) ([]Patent, int64, error) {
 	var patents []Patent
-	if err := utils.DB.Find(&patents).Error; err != nil {
-		return nil, err
-	}
+	var total int64
 
-	//在根据id查询用户信息
+	query := PatentDB.Model(&Patent{})
 
-	return patents, nil
-}
-
-// UpdatePatent 更新专利信息
-func UpdatePatent(patent *Patent) error {
-	return utils.DB.Model(&Patent{}).Where("id = ? ", patent.Id).Select("patent_name", "warrant_date", "status").Error
-}
-
-// DeletePatent 删除专利及关联费用信息
-func DeletePatent(applyNo string) error {
-	// 开启事务
-	tx := utils.DB.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
-	// 1. 根据申请号获取专利ID
-	var patent Patent
-	if err := tx.Where("apply_no = ?", applyNo).First(&patent).Error; err != nil {
-		tx.Rollback()
-		return fmt.Errorf("专利查询失败: %v", err)
-	}
-
-	// 2. 删除关联的PatentFee记录
-	if err := tx.Where("patent_id = ?", patent.Id).Delete(&PatentFee{}).Error; err != nil {
-		tx.Rollback()
-		return fmt.Errorf("删除费用记录失败: %v", err)
-	}
-
-	// 3. 删除专利记录
-	if err := tx.Delete(&patent).Error; err != nil {
-		tx.Rollback()
-		return fmt.Errorf("删除专利失败: %v", err)
-	}
-
-	// 提交事务
-	if err := tx.Commit().Error; err != nil {
-		return fmt.Errorf("事务提交失败: %v", err)
-	}
-
-	return nil
-}
-
-// FindPatentFuzzy 模糊查询
-func FindPatentFuzzy(keyword string, status int) ([]Patent, error) {
-	db := utils.DB.Model(&Patent{}).
-		Preload("User").
-		Joins("LEFT JOIN users ON users.id = patents.user_id")
+	// 关键词模糊查询（添加申请号的模糊查询）
 	if keyword != "" {
-		db = db.Where("patents.apply_no like ? OR patents.patent_name like ? OR users.user_name like ? ", "%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%")
+		keyword = "%" + keyword + "%"
+		query = query.Where(
+			"title LIKE ? OR application_number LIKE ? OR EXISTS ("+
+				"SELECT 1 FROM patent_authors "+
+				"JOIN users ON patent_authors.user_id = users.id "+
+				"WHERE patent_authors.patent_id = patents.id "+
+				"AND (users.user_name LIKE ?)"+
+				")",
+			keyword,
+			keyword,
+			keyword,
+		)
 	}
-	if status > 0 {
-		db = db.Where("patents.status =?", status)
+
+	// 审核状态过滤
+	if approvalStatus >= 0 {
+		query = query.Where("approval_status = ?", approvalStatus)
 	}
-	var patents []Patent
-	if err := db.Find(&patents).Error; err != nil {
-		return nil, err
+
+	// 专利类型过滤
+	if patentType > 0 {
+		query = query.Where("patent_type = ?", patentType)
 	}
-	return patents, nil
+
+	// 预加载作者信息
+	if preloadAuthors {
+		query = query.
+			Preload("FirstAuthor").
+			Preload("Authors")
+	}
+
+	// 计算总数
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// 分页处理
+	if page > 0 && pageSize > 0 {
+		query = query.Offset((page - 1) * pageSize).Limit(pageSize)
+	}
+
+	// 获取结果
+	if err := query.Order("created_at DESC").Find(&patents).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return patents, total, nil
 }
 
-// GetPatentFile 根据专利号拿到所有文件--返回所有nginx地址前端再次请求
-func GetPatentFile(applyNo string) ([]string, error) {
+// GetPatentFile 根据专利id来查询所有文件地址
+func GetPatentFile(id int) ([]string, error) {
 	var ans []string
-	baseurl := utils.NgX.LocationDocs + "/" + applyNo //文件夹
+	var patent Patent
+	PatentDB.Model(&Patent{}).Select("application_number").Where("id =?", id).Find(&patent)
+
+	baseurl := utils.NgX.LocationPatent + "/" + patent.ApplicationNumber
 	dir, err := os.ReadDir(baseurl)
 	if err != nil {
 		return nil, err
 	}
 	for _, file := range dir {
-		ans = append(ans, "/docs/"+applyNo+"/"+file.Name())
+		ans = append(ans, "/patent/"+patent.ApplicationNumber+"/"+file.Name())
 	}
+
 	return ans, nil
 }
 
-// UpdateStatusByApplicationNumber 根据申请号更新status同时更新到年费表中
-func UpdateStatusByApplicationNumber(applyNo string, newStatus int) error {
-	// 参数校验
-	if applyNo == "" {
-		return fmt.Errorf("专利申请号不能为空")
-	}
-	if newStatus < AwaitingApproval || newStatus > Rejected {
-		return fmt.Errorf("无效的状态码: %d", newStatus)
+// DeletePatent 删除专利及其关联数据
+// 参数：
+//   - id: 专利ID
+//
+// 返回：
+//   - error 错误信息
+func DeletePatent(id int) error {
+	// 开启数据库事务
+	err := PatentDB.Transaction(func(tx *gorm.DB) error {
+		// 1. 删除作者关联记录
+		if err := tx.Where("patent_id = ?", id).Delete(&PatentAuthor{}).Error; err != nil {
+			return err
+		}
+
+		// 2. 删除主记录（修正后的版本）
+		if err := tx.Where("id = ?", id).Delete(&Patent{}).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	// 3. 清理文件系统（在事务成功后执行）
+	if err == nil {
+		if cleanErr := cleanPatentFiles(id); cleanErr != nil {
+			log.Printf("文件清理失败: %v", cleanErr)
+		}
 	}
 
-	// 使用 GORM 进行更新操作
-	result := utils.DB.Model(&Patent{}).
-		Where("apply_no = ?", applyNo).
-		Update("status", newStatus)
+	return err
+}
 
-	// 错误处理
-	if result.Error != nil {
-		return fmt.Errorf("更新状态失败: %v", result.Error)
+// cleanPatentFiles 清理专利相关文件
+func cleanPatentFiles(id int) error {
+	// 构建安全路径
+	safePath := filepath.Join(utils.NgX.LocationPatent, "/", strconv.Itoa(id))
+
+	// 验证路径是否在允许的根目录下（防止路径遍历攻击）
+	if !strings.HasPrefix(filepath.Clean(safePath)+string(filepath.Separator),
+		filepath.Clean(utils.NgX.LocationPatent)+string(filepath.Separator)) {
+		return errors.New("非法路径")
 	}
 
-	// 检查是否实际更新了记录
-	if result.RowsAffected == 0 {
-		return fmt.Errorf("未找到申请号为 %s 的专利", applyNo)
-	}
+	// 删除目录及其内容
+	return os.RemoveAll(safePath)
+}
 
-	var p Patent
-	err := utils.DB.Model(&Patent{}).Where("apply_no = ?", applyNo).Find(&p).Error
+// GetPatentById 根据id查询Patent
+func GetPatentById(id int) (Patent, error) {
+	var patent Patent
+	if err := PatentDB.Model(&Patent{}).Select("current_step", "id").Where("id = ?", id).Find(&patent).Error; err != nil {
+		return Patent{}, err
+	}
+	return patent, nil
+}
+
+// UpdatePatentStatus 更新状态
+func UpdatePatentStatus(
+	patentId int,
+	ReviewerID int,
+	Comment string,
+	Status int, // 0=驳回，1=通过
+) error {
+	// 查询完整专利信息
+	patent, err := GetPatentById(patentId)
 	if err != nil {
 		return err
 	}
-	//添加年费
+
 	now := time.Now()
-	curr := now.Year()
-	f := PatentFee{
-		PatentID:      p.Id,
-		Patent:        p,
-		FeeYear:       curr,
-		PaymentStatus: 0,
-		DeadlineDate:  now.AddDate(0, 1, 0), //设置一个月
-		Amount:        GetFee(p.PatentType),
+	updates := make(map[string]interface{})
+
+	if patent.CurrentStep == ApprovalStepInitial {
+		// 初审逻辑
+		patent.InitialReviewerID = ReviewerID
+		patent.InitialComment = Comment
+		patent.InitialSubmitTime = now
+		patent.InitialStatus = Status == 1
+
+		if Status == 1 {
+			// 初审通过，进入终审
+			patent.CurrentStep = ApprovalStepFinal
+		} else {
+			// 初审驳回
+			patent.ApprovalStatus = ApprovalStatusRejected
+		}
+
+		updates = map[string]interface{}{
+			"current_step":        patent.CurrentStep,
+			"approval_status":     patent.ApprovalStatus,
+			"initial_reviewer_id": patent.InitialReviewerID,
+			"initial_comment":     patent.InitialComment,
+			"initial_submit_time": patent.InitialSubmitTime,
+			"initial_status":      patent.InitialStatus,
+		}
+	} else if patent.CurrentStep == ApprovalStepFinal {
+		// 终审逻辑
+		patent.FinalReviewerID = ReviewerID
+		patent.FinalComment = Comment
+		patent.FinalSubmitTime = now
+		patent.FinalStatus = Status == 1
+
+		if Status == 1 {
+			// 终审通过
+			patent.ApprovalStatus = ApprovalStatusApproved
+		} else {
+			// 终审驳回
+			patent.ApprovalStatus = ApprovalStatusRejected
+		}
+
+		updates = map[string]interface{}{
+			"approval_status":   patent.ApprovalStatus,
+			"final_reviewer_id": patent.FinalReviewerID,
+			"final_comment":     patent.FinalComment,
+			"final_submit_time": patent.FinalSubmitTime,
+			"final_status":      patent.FinalStatus,
+		}
 	}
-	err2 := NewPatentAnnualFee(&f)
-	if err2 != nil {
-		return err2
+
+	// 执行数据库更新
+	if err := PatentDB.Model(&Patent{}).
+		Where("id = ?", patentId).
+		Updates(updates).Error; err != nil {
+		return err
 	}
+
 	return nil
 }

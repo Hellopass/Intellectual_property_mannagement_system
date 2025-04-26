@@ -38,14 +38,40 @@ func generateSerialNumber() string {
 }
 
 // GenerateApplicationNumber 生成专利申请号
-func GenerateApplicationNumber(countryCode string, year string, patentType int) (string, error) {
-	itoa := strconv.Itoa(patentType)
+func GenerateApplicationNumber(countryCode string, year string, Type int) (string, error) {
+	itoa := strconv.Itoa(Type)
 	serialNumber := generateSerialNumber()
 	if len(year) != 4 || len(itoa) != 1 || len(serialNumber) != 7 {
 		return "", errors.New("输入的参数长度不正确")
 	}
 
 	patentID := countryCode + year + itoa + serialNumber
+	checkDigit := calculateCheckDigit(patentID)
+	return patentID + checkDigit, nil
+}
+
+// GenerateArticleApplicationNumber 生成著作申请号
+func GenerateArticleApplicationNumber(countryCode string, year string, Type int) (string, error) {
+	itoa := strconv.Itoa(Type)
+	serialNumber := generateSerialNumber()
+	if len(year) != 4 || len(itoa) != 1 || len(serialNumber) != 7 {
+		return "", errors.New("输入的参数长度不正确")
+	}
+
+	patentID := countryCode + year + serialNumber + itoa
+	checkDigit := calculateCheckDigit(patentID)
+	return patentID + checkDigit, nil
+}
+
+// GenerateTrademarkApplicationNumber 生成著作申请号
+func GenerateTrademarkApplicationNumber(countryCode string, year string, Type int) (string, error) {
+	itoa := strconv.Itoa(Type)
+	serialNumber := generateSerialNumber()
+	if len(year) != 4 || len(itoa) != 1 || len(serialNumber) != 7 {
+		return "", errors.New("输入的参数长度不正确")
+	}
+
+	patentID := countryCode + serialNumber + year + itoa
 	checkDigit := calculateCheckDigit(patentID)
 	return patentID + checkDigit, nil
 }

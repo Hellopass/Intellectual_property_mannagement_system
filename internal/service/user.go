@@ -103,12 +103,13 @@ func AddUser(c *gin.Context) {
 	}
 	//创建用户
 	u := models.User{
-		UserName: username,
-		Email:    email,
-		Password: salt + ":" + EnPassword,
-		IDCard:   idcard,
-		Sex:      gender,
-		Status:   "1",
+		UserName:  username,
+		Email:     email,
+		Password:  salt + ":" + EnPassword,
+		IDCard:    idcard,
+		Sex:       gender,
+		Status:    "1",
+		Authority: "user",
 	}
 
 	//添加用户

@@ -43,8 +43,9 @@ type Article struct {
 	FinalSubmitTime time.Time `json:"final_submit_time" gorm:"type:datetime;comment:终审提交时间"`
 	FinalStatus     bool      `json:"final_status" gorm:"comment:终审状态"`
 
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	ApplicationNumber string `json:"application_number" gorm:"type:varchar(255);comment:著作申请号"`
 }
 
 // ArticleAuthor 著作-作者关联模型
@@ -58,14 +59,6 @@ type ArticleAuthor struct {
 // ArticleDB 全局数据库连接实例
 // 使用utils包中初始化的数据库连接，用于执行数据库操作
 var ArticleDB *gorm.DB = utils.DB
-
-// ArticleFunc 著作模型功能接口
-// 用于实现模型相关业务逻辑
-type ArticleFunc interface {
-	CreateArticleService() error       //新建著作
-	UpdateArticleUrl(id int) error     //更新资源URL
-	GetArticleFile() ([]string, error) //拿到资源URL
-}
 
 // NewArticle 创建著作实例
 // 参数：
@@ -81,11 +74,11 @@ func NewArticle(
 	authorIDs []int,
 	firstAuthorID int,
 	abstract string,
-) (*Article, error) {
+) (*Article, *ArticleFee, error) {
 
 	// 验证第一作者合法性
 	if !contains(authorIDs, firstAuthorID) {
-		return nil, errors.New("第一作者必须包含在作者列表中")
+		return nil, nil, errors.New("第一作者必须包含在作者列表中")
 	}
 
 	// 初始化作者关联记录
@@ -96,7 +89,25 @@ func NewArticle(
 			IsFirstAuthor: uid == firstAuthorID,
 		})
 	}
+	// 初始化年费对象
+	var reviewFee float64
+	switch articleType {
+	case PracticalInvention:
+		reviewFee = 1
+	case PatentInvention:
+		reviewFee = 2
+	case AppearanceDesign:
+		reviewFee = 1
+	}
 
+	patentFee := &ArticleFee{
+		ArticleID:       0, // 后续在创建专利时更新
+		ReviewFee:       reviewFee,
+		IsPaid:          false,
+		CreatedAt:       time.Now(),
+		PaymentDeadline: time.Now().AddDate(0, 1, 0), //一个月
+		Status:          0,
+	}
 	return &Article{
 		ArticleType:    articleType,
 		Title:          title,
@@ -106,7 +117,7 @@ func NewArticle(
 		ApplyDate:      time.Now(),
 		CurrentStep:    1,
 		ApprovalStatus: 0,
-	}, nil
+	}, patentFee, nil
 }
 
 // contains 检查切片是否包含指定元素
@@ -124,13 +135,20 @@ func contains(s []int, e int) bool {
 // 1. 创建主记录
 // 2. 创建作者关联记录
 // 3. 更新第一作者外键
-func (article *Article) CreateArticleService() error {
+func (article *Article) CreateArticleService(articlefee *ArticleFee) error {
 	return ArticleDB.Transaction(func(tx *gorm.DB) error {
 		// 创建主记录
 		if err := tx.Create(article).Error; err != nil {
 			return err
 		}
 
+		// 更新专利年费对象的 PatentID
+		articlefee.ArticleID = article.ID
+
+		// 保存专利年费记录
+		if err := tx.Create(articlefee).Error; err != nil {
+			return err
+		}
 		// 清理旧关联记录
 		if err := tx.Where("article_id = ?", article.ID).Delete(&ArticleAuthor{}).Error; err != nil {
 			return err
@@ -153,6 +171,11 @@ func (article *Article) CreateArticleService() error {
 
 		return nil
 	})
+}
+
+// UpdateArticleUrl 更新资源url
+func (article *Article) UpdateArticleUrl() error {
+	return ArticleDB.Model(&Article{}).Where("id =?", article.ID).Select("attachment_url").Updates(article).Error
 }
 
 // GetAllArticles 获取所有著作及其关联信息
@@ -229,25 +252,20 @@ func GetAllArticles(
 	return articles, total, nil
 }
 
-// UpdateArticleUrl 更新资源url
-func (article *Article) UpdateArticleUrl() error {
-	return ArticleDB.Model(&Article{}).Where("id =?", article.ID).Select("attachment_url").Updates(article).Error
-}
-
 // GetArticleFile 根据第文章id来查询所有文件地址
 func GetArticleFile(id int) ([]string, error) {
 	var ans []string
-	var directory string
-	directory = strconv.Itoa(id)
-	baseurl := utils.NgX.LocationArticle + "/" + directory
+	var article Article
+	PatentDB.Model(&Article{}).Select("application_number,attachment_url").Where("id =?", id).Find(&article)
+
+	baseurl := utils.NgX.LocationArticle + "/" + article.ApplicationNumber
 	dir, err := os.ReadDir(baseurl)
 	if err != nil {
 		return nil, err
 	}
 	for _, file := range dir {
-		ans = append(ans, "/article/"+directory+"/"+file.Name())
+		ans = append(ans, "/article/"+article.ApplicationNumber+"/"+file.Name())
 	}
-
 	return ans, nil
 }
 

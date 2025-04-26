@@ -5,10 +5,11 @@ import "github.com/spf13/viper"
 var NgX Nginx
 
 type Nginx struct {
-	LocationAvatar  string `json:"location_avatar"`
-	LocationDocs    string `json:"location_docs"`
-	LocationArticle string `json:"location_article"`
-	Url             string `json:"url"`
+	LocationAvatar    string `json:"location_avatar"`
+	LocationPatent    string `json:"location_patent"`
+	LocationArticle   string `json:"location_article"`
+	LocationTrademark string `json:"location_trademark"`
+	Url               string `json:"url"`
 }
 
 // getNginxConfig 读取Nginx配置文件
@@ -22,7 +23,8 @@ func getNginxConfig() Nginx {
 	}
 	m.LocationAvatar = viper.GetString("nginx.location_avatar")
 	m.Url = viper.GetString("nginx.url")
-	m.LocationDocs = viper.GetString("nginx.location_docs")
+	m.LocationPatent = viper.GetString("nginx.location_patent")
+	m.LocationTrademark = viper.GetString("nginx.location_trademark")
 	m.LocationArticle = viper.GetString("nginx.location_article")
 	return m
 }

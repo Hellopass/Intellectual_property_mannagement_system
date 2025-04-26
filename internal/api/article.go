@@ -1,8 +1,9 @@
 package api
 
 import (
-	"github.com/gin-gonic/gin"
 	"intellectual_property/internal/service"
+
+	"github.com/gin-gonic/gin"
 )
 
 func initArticle(r *gin.Engine) {
@@ -21,4 +22,10 @@ func initArticle(r *gin.Engine) {
 
 	//跟新审核状态
 	group.PUT("/update_article_aduit", service.UpdateArticleStatus)
+
+	// 获取所有著作年费
+	group.GET("/get_fee_all", service.GetAllArticleFees)
+
+	// 获取本月著作年费统计信息
+	group.GET("/get_monthly_fee_stats", service.GetMonthlyArticleFeeStatsService)
 }

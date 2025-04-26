@@ -35,6 +35,7 @@ func Login(c *gin.Context) {
 			Resp(c, true, http.StatusOK, "登录成功", gin.H{
 				"token":   token,
 				"success": true,
+				"role":    user.Authority,
 			})
 			return
 		} else {

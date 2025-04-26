@@ -37,8 +37,8 @@ func generateSerialNumber() string {
 	return serialNumber
 }
 
-// GenerateApplyNo 生成专利申请号
-func GenerateApplyNo(countryCode string, year string, patentType int) (string, error) {
+// GenerateApplicationNumber 生成专利申请号
+func GenerateApplicationNumber(countryCode string, year string, patentType int) (string, error) {
 	itoa := strconv.Itoa(patentType)
 	serialNumber := generateSerialNumber()
 	if len(year) != 4 || len(itoa) != 1 || len(serialNumber) != 7 {
